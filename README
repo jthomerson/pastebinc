@@ -1,0 +1,15 @@
+pastebinc is really just a pet project because I want to get better at writing
+c code.  It "scratches an itch" so to speak.  I often want to paste a bit of a
+log file or script to pastebin and send it to a co-worker.  But, I have to get
+it on the console somehow (if it all fits), select it, copy and paste (which 
+usually involves the mouse).  Instead, I'd like to be able to do this:
+
+$ cat somefile.sh | pastebinc
+Your paste: http://pastebin.com/SomeURL
+
+Or this:
+$ tail -n some.log | pastebinc
+Your paste: http://pastebin.com/SomeURL
+
+I aim to make this tool be that simple to use and to support multiple pastebin
+sites, including private ones, with simple configuration options.
