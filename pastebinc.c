@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #include <string.h>
 
+#include <glib.h>
 #include <curl/curl.h>
 
 #define BSIZE (8 * 1024)
@@ -37,6 +38,28 @@ struct paste_info {
 int main(int argc, char *argv[]) {
   struct paste_info pi;
   int retval = 0;
+  gchar *site;
+
+  GKeyFile *keyfile;
+  GKeyFileFlags flags;
+  GError *error = NULL;
+  gsize length;
+
+  keyfile = g_key_file_new();
+  flags = G_KEY_FILE_KEEP_COMMENTS | G_KEY_FILE_KEEP_TRANSLATIONS;
+
+  /* Load the GKeyFile from keyfile.conf or return. */
+  if (!g_key_file_load_from_file(keyfile, "./pastebinc.conf", flags, &error))
+  {
+    fprintf(stderr, "error reading config: %s\n", error->message);
+    g_error_free(error);
+    retval = 1;
+    goto completed;
+  }
+
+  site = g_key_file_get_string(keyfile, "pastebin", "basename", NULL);
+  fprintf(stderr, "Pasting to site: %s\n", site);
+  // for full example see: http://www.gtkbook.com/tutorial.php?page=keyfile
 
 #ifdef PRINTPASTE
   char *buf;

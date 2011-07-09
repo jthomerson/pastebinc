@@ -8,7 +8,12 @@ if [[ "${1}" == "1" ]]; then
   ARGS="${ARGS} -DPRINTPASTE"
 fi
 
-gcc -lcurl ${ARGS} pastebinc.c -o ./pastebinc
+gcc ${ARGS} \
+  -lcurl \
+  `pkg-config --cflags --libs glib-2.0` \
+  pastebinc.c \
+  -o ./pastebinc
+
 echo "Done"
 
 if [[ "${1}" == "1" ]]; then
