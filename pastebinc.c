@@ -99,8 +99,6 @@ int pastebin_post(struct pastebinc_config *config, struct paste_info *pi) {
 
   curl_global_init(CURL_GLOBAL_ALL);
 
-  // Add the content of a file as a normal post text value
-
   curl_formadd(&post, &last, CURLFORM_COPYNAME, "paste_name", CURLFORM_COPYCONTENTS, "pastebinc test", CURLFORM_END);
   curl_formadd(&post, &last, CURLFORM_COPYNAME, content_fieldname, CURLFORM_FILECONTENT, pi->tmpname, CURLFORM_END);
 
