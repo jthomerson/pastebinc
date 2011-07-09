@@ -18,5 +18,7 @@ echo "Done"
 
 if [[ "${1}" == "1" ]]; then
   echo "Testing"
+  echo "--"
+  echo ""
   date | ./pastebinc
 fi
