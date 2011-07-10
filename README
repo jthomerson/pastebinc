@@ -1,8 +1,12 @@
+                              README - pastebinc
+             Project home: https://github.com/jthomerson/pastebinc
+
 pastebinc is really just a pet project because I want to get better at writing
-c code.  It "scratches an itch" so to speak.  I often want to paste a bit of a
-log file or script to pastebin and send it to a co-worker.  But, I have to get
-it on the console somehow (if it all fits), select it, copy and paste (which 
-usually involves the mouse).  Instead, I'd like to be able to do this:
+c code (I come from a Java-intense background).  It "scratches an itch" so to 
+speak.  I often want to paste a bit of a log file or script to pastebin and 
+send it to a co-worker.  But, I have to get it on the console somehow (if it 
+all fits), select it, copy and paste (which usually involves the mouse).  
+Instead, I'd like to be able to do this:
 
 $ cat somefile.sh | pastebinc
 Your paste: http://pastebin.com/SomeURL
