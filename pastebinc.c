@@ -1,4 +1,5 @@
-/*
+/* pastebinc.c:
+ *
  * Copyright (C) 2011 Jeremy Thomerson - http://www.jeremythomerson.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,11 +26,17 @@
 #include <glib.h>
 #include <curl/curl.h>
 
+#define PROGRAM_NAME "pastebinc"
+#define VERSION "0.1-BETA"
+
 #define BSIZE (8 * 1024)
 #define TMPNAME "/tmp/pastebinc.XXXXXX"
 #define TMPNAMELEN 22
 
 struct pastebinc_config {
+  char *name;
+  int verbose;
+  int tee;
 };
 
 struct mem_struct {
@@ -46,27 +53,76 @@ struct paste_info {
 int main(int argc, char *argv[]) {
   struct paste_info pi;
   struct pastebinc_config config;
-  int retval = 0;
+  int abort = 0;
 
-  get_configuration(&config, argc, argv);
-
-  if (write_input_to_paste_info(&pi) == -1) {
-    retval = 1;
+  if (isatty(fileno(stdin))) {
+    display_usage();
+    fprintf(stderr, "\nERROR: You must pipe data into " PROGRAM_NAME "\n");
+    abort = 1;
   }
 
-  if(retval == 0) {
-    retval = print_paste(&pi);
-  }
+  if (!abort)
+    abort = get_configuration(&config, argc, argv);
 
-  pastebin_post(&config, &pi);
+  if (!abort && write_input_to_paste_info(&config, &pi))
+    abort = 1;
 
-  // TODO: do I need to free the memory held by pi?  (if so, do it with each return above)
+  if (!abort)
+    pastebin_post(&config, &pi);
+
+  // TODO: do I need to free the memory held by pi? or other variables?
   unlink(pi.tmpname);
   close(pi.fd);
+  return abort ? 1 : 0;
+}
+
+/*
+ * Takes stdin input and writes it to a temporary file that will be used
+ * to post to a pastebin site.  Fills paste_info with the appropriate info
+ * about what it did (file path and pointer to written file).
+ */
+int write_input_to_paste_info(struct pastebinc_config *config, struct paste_info *pi) {
+  int readval;
+  char *buf;
+
+  strcpy(pi->tmpname, TMPNAME);
+
+  if ((pi->fd = mkstemp(pi->tmpname)) == -1 || (pi->content = fdopen(pi->fd, "w+")) == NULL) {
+    if (pi->fd != -1) {
+      unlink(pi->tmpname);
+      close(pi->fd);
+    }
+    fprintf(stderr, "Error opening tmp file (%s): %s\n", pi->tmpname, strerror(errno));
+    return 1;
+  }
+
+  if (config->verbose)
+    fprintf(stderr, "DEBUG: Writing to tmp file: %s\n", pi->tmpname);
+
+  if ((buf = malloc((u_int)BSIZE)) == NULL) {
+    fprintf(stderr, "Error allocating %d memory for stdin read buffer: %s\n", ((u_int)BSIZE), strerror(errno));
+    return 1;
+  }
+
+  while ((readval = read(STDIN_FILENO, buf, BSIZE)) > 0)
+  {
+    if (config->tee)
+      fprintf(stdout, "%s", buf);
+
+    if (write(pi->fd, buf, readval) == -1)
+    {
+      fprintf(stderr, "Error writing to tmp file: %s", strerror(errno));
+      return 1;
+    }
+  }
+
   return 0;
 }
 
-
+/*
+ * Callback for curl that uses the mem_struct structure to build the response
+ * of the HTTP post into a char array.
+ */
 size_t write_data(void *buffer, size_t size, size_t nmemb, void *userp) {
   size_t realsize = size * nmemb;
   struct mem_struct *mem = (struct mem_struct *) userp;
@@ -84,7 +140,11 @@ size_t write_data(void *buffer, size_t size, size_t nmemb, void *userp) {
   return realsize;
 }
 
+/*
+ * Post the content contained within paste_info to the appropriate site (from config)
+ */
 int pastebin_post(struct pastebinc_config *config, struct paste_info *pi) {
+ // TODO: these need to come from config files:
   static const char url[] = "http://pastebin.com/api_public.php";
   static const char content_fieldname[] = "paste_code";
 
@@ -99,12 +159,14 @@ int pastebin_post(struct pastebinc_config *config, struct paste_info *pi) {
 
   curl_global_init(CURL_GLOBAL_ALL);
 
-  curl_formadd(&post, &last, CURLFORM_COPYNAME, "paste_name", CURLFORM_COPYCONTENTS, "pastebinc test", CURLFORM_END);
+  curl_formadd(&post, &last, CURLFORM_COPYNAME, "paste_name", CURLFORM_COPYCONTENTS, config->name, CURLFORM_END);
   curl_formadd(&post, &last, CURLFORM_COPYNAME, content_fieldname, CURLFORM_FILECONTENT, pi->tmpname, CURLFORM_END);
 
   curl = curl_easy_init();
   if (curl) {
-    fprintf(stderr, "pasting to: %s\n", url);
+    if (config->verbose)
+      fprintf(stderr, "DEBUG: Pasting to: %s\n", url);
+
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_HTTPPOST, post);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
@@ -115,7 +177,9 @@ int pastebin_post(struct pastebinc_config *config, struct paste_info *pi) {
     curl_easy_cleanup(curl);
     curl_formfree(post);
 
-    fprintf(stderr, "Response: %s\n", chunk.memory);
+    fprintf(stderr,
+      (config->verbose ? "Paste URL: %s\n" : "%s\n"),
+      chunk.memory);
   } else {
     fprintf(stderr, "Error initializing curl: %s\n", strerror(errno));
     return 1;
@@ -129,128 +193,57 @@ int pastebin_post(struct pastebinc_config *config, struct paste_info *pi) {
   return 0;
 }
 
-int print_paste(struct paste_info *pi) {
-#ifdef PRINTPASTE
-  char *buf;
-  int readval;
+/*
+ * Parses command-line options and configuration files to fully configure the
+ * information we need to run the program.
+ */
+int get_configuration(struct pastebinc_config *config, int argc, char *argv[]) {
+  /* TODO: Want to support the following flags:
+   -f, --format  paste format (java, bash, etc)
 
-  if ((buf = malloc((u_int)BSIZE)) == NULL) {
-    fprintf(stderr, "error allocating %d memory for read buffer: %s\n", ((u_int)BSIZE), strerror(errno));
-    return 1;
+   TODO: right now we're only supporting the short form of each flag
+  */
+  int c;
+  opterr = 0;
+
+  config->tee = 0;
+  config->verbose = 0;
+  config->name = NULL;
+
+  while ((c = getopt(argc, argv, "htvn:")) != -1) {
+    switch (c) {
+      case 't':
+        config->tee = 1;
+        break;
+      case 'v':
+        config->verbose = 1;
+        break;
+      case 'n':
+        config->name = optarg;
+        break;
+      case 'h':
+        display_usage();
+        return 1;
+      default:
+        fprintf(stderr, "Unknown option: '%c'\n", optopt);
+        return 1;
+    }
   }
 
-  rewind(pi->content);
-  fprintf(stderr, "Paste will be:\n");
-
-  while ((readval = read(pi->fd, buf, BSIZE)) > 0) {
-    fprintf(stderr, "%s", buf);
-  }
-#endif
+  return 0;
 }
 
 /*
-int get_configuration(void) {
-  gchar *site;
-
-  GKeyFile *keyfile;
-  GKeyFileFlags flags;
-  GError *error = NULL;
-  gsize length;
-
-  keyfile = g_key_file_new();
-  flags = G_KEY_FILE_KEEP_COMMENTS | G_KEY_FILE_KEEP_TRANSLATIONS;
-
-  // Load the GKeyFile from keyfile.conf or return.
-  if (!g_key_file_load_from_file(keyfile, "./pastebinc.conf", flags, &error))
-  {
-    fprintf(stderr, "error reading config: %s\n", error->message);
-    g_error_free(error);
-    return 1;
-  }
-
-  site = g_key_file_get_string(keyfile, "pastebin", "basename", NULL);
-  fprintf(stderr, "Pasting to site: %s\n", site);
-  // for full example see: http://www.gtkbook.com/tutorial.php?page=keyfile
-  return 0;
-}
-*/
-
-int get_configuration(struct pastebinc_config *config, int argc, char *argv[]) {
-  int aflag = 0;
-  int bflag = 0;
-  char *cvalue = NULL;
-  int index;
-  int c;
-
-  opterr = 0;
-
-  while ((c = getopt(argc, argv, "abc:")) != -1) {
-    switch (c) {
-      case 'a':
-        aflag = 1;
-        break;
-      case 'b':
-        bflag = 1;
-        break;
-      case 'c':
-        cvalue = optarg;
-        break;
-      case '?':
-        if (optopt == 'c')
-    fprintf (stderr, "Option -%c requires an argument.\n", optopt);
-        else if (isprint (optopt))
-    fprintf (stderr, "Unknown option `-%c'.\n", optopt);
-        else
-    fprintf (stderr, "Unknown option character `\\x%x'.\n", optopt);
-        return 1;
-      default:
-        abort();
-    }
-  }
-
-  if(aflag)
-    printf("yes - aflag\n");
-
-  printf("aflag = %d, bflag = %d, cvalue = %s\n", aflag, bflag, cvalue);
-
-  for (index = optind; index < argc; index++) {
-    printf ("Non-option argument %s\n", argv[index]);
-  }
-
-  return 0;
-}
-
-int write_input_to_paste_info(struct paste_info *pi) {
-  int readval;
-  char *buf;
-
-  strcpy(pi->tmpname, TMPNAME);
-
-  if ((pi->fd = mkstemp(pi->tmpname)) == -1 || (pi->content = fdopen(pi->fd, "w+")) == NULL) {
-    if (pi->fd != -1) {
-      unlink(pi->tmpname);
-      close(pi->fd);
-    }
-    fprintf(stderr, "%s: %s\n", pi->tmpname, strerror(errno));
-    return 1;
-  }
-
-  fprintf(stderr, "writing to: %s\n", pi->tmpname);
-
-  if ((buf = malloc((u_int)BSIZE)) == NULL) {
-    fprintf(stderr, "error allocating %d memory for stdin buffer: %s\n", ((u_int)BSIZE), strerror(errno));
-    return 1;
-  }
-
-  while ((readval = read(STDIN_FILENO, buf, BSIZE)) > 0)
-  {
-    //fprintf(stderr, "content: %s\n", buf);
-    if (write(pi->fd, buf, readval) == -1) 
-    {
-      fprintf(stderr, "error writing to file: %s", strerror(errno));
-      return 1;
-    }
-  }
-
-  return 0;
+ * Print basic usage information for users.
+ */
+int display_usage(void) {
+  fprintf(stderr,
+    PROGRAM_NAME " " VERSION "\n\n"
+   "Pastes whatever is piped in to stdin to pastebin.com or similar site.\n"
+   "Options:\n\n"
+   "  -t          'tee', or print out all input from stdin to stdout\n"
+   "  -v          'verbose', or print out debugging information as I work\n"
+   "  -n [value]  the name (or title) of your paste\n"
+   "  -h          print this usage message\n"
+   );
 }
