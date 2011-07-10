@@ -26,8 +26,13 @@
 #include <glib.h>
 #include <curl/curl.h>
 
-#define PROGRAM_NAME "pastebinc"
+#ifndef PROGNAME
+#define PROGNAME "pastebinc"
+#endif
+
+#ifndef VERSION
 #define VERSION "0.1-BETA"
+#endif
 
 #define BSIZE (8 * 1024)
 #define TMPNAME "/tmp/pastebinc.XXXXXX"
@@ -57,7 +62,7 @@ int main(int argc, char *argv[]) {
 
   if (isatty(fileno(stdin))) {
     display_usage();
-    fprintf(stderr, "\nERROR: You must pipe data into " PROGRAM_NAME "\n");
+    fprintf(stderr, "\nERROR: You must pipe data into " PROGNAME "\n");
     abort = 1;
   }
 
@@ -238,7 +243,7 @@ int get_configuration(struct pastebinc_config *config, int argc, char *argv[]) {
  */
 int display_usage(void) {
   fprintf(stderr,
-    PROGRAM_NAME " " VERSION "\n\n"
+    PROGNAME " " VERSION "\n\n"
    "Pastes whatever is piped in to stdin to pastebin.com or similar site.\n"
    "Options:\n\n"
    "  -t          'tee', or print out all input from stdin to stdout\n"
