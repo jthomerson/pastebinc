@@ -12,7 +12,7 @@ $ cat somefile.sh | pastebinc
 Your paste: http://pastebin.com/SomeURL
 
 Or this:
-$ tail -n some.log | pastebinc
+$ tail -n 100 some.log | pastebinc
 Your paste: http://pastebin.com/SomeURL
 
 I aim to make this tool be that simple to use and to support multiple pastebin
