@@ -60,20 +60,19 @@ int main(int argc, char *argv[]) {
   struct pastebinc_config config;
   int abort = 0;
 
-  if (isatty(fileno(stdin))) {
+  abort = get_configuration(&config, argc, argv);
+
+  if (!abort && isatty(fileno(stdin))) {
+    fprintf(stderr, "ERROR: You must pipe data into " PROGNAME "\n");
     display_usage();
-    fprintf(stderr, "\nERROR: You must pipe data into " PROGNAME "\n");
     abort = 1;
   }
-
-  if (!abort)
-    abort = get_configuration(&config, argc, argv);
 
   if (!abort && write_input_to_paste_info(&config, &pi))
     abort = 1;
 
   if (!abort)
-    pastebin_post(&config, &pi);
+    abort = pastebin_post(&config, &pi);
 
   // TODO: do I need to free the memory held by pi? or other variables?
   unlink(pi.tmpname);
@@ -161,6 +160,9 @@ int pastebin_post(struct pastebinc_config *config, struct paste_info *pi) {
   CURLcode res;
   struct curl_httppost *post = NULL;
   struct curl_httppost *last = NULL;
+  long http_resp_code = 0;
+  long curl_code;
+  int abort = 0;
 
   curl_global_init(CURL_GLOBAL_ALL);
 
@@ -179,12 +181,19 @@ int pastebin_post(struct pastebinc_config *config, struct paste_info *pi) {
 
     res = curl_easy_perform(curl);
 
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_resp_code);
+    if (http_resp_code != 200 || curl_code == CURLE_ABORTED_BY_CALLBACK) {
+      abort = 1; // call failed
+      fprintf(stderr, "ERROR: server response was %ld\n", http_resp_code);
+      if (config->verbose) {
+        fprintf(stderr, "Contents of reponse where: \n%s\n", chunk.memory);
+      }
+    } else {
+      fprintf(stderr, (config->verbose ? "Paste URL: %s\n" : "%s\n"), chunk.memory);
+    }
+
     curl_easy_cleanup(curl);
     curl_formfree(post);
-
-    fprintf(stderr,
-      (config->verbose ? "Paste URL: %s\n" : "%s\n"),
-      chunk.memory);
   } else {
     fprintf(stderr, "Error initializing curl: %s\n", strerror(errno));
     return 1;
@@ -195,7 +204,7 @@ int pastebin_post(struct pastebinc_config *config, struct paste_info *pi) {
 
   curl_global_cleanup();
 
-  return 0;
+  return abort;
 }
 
 /*
