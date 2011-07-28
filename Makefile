@@ -13,7 +13,7 @@ LIBS   += $(shell pkg-config --libs   glib-2.0)
 
 CC     ?= gcc
 
-TARGETS  = $(PROGNAME)
+TARGETS  = pastebinc
 
 prefix ?= /usr/local
 bindir ?= $(prefix)/bin
@@ -33,7 +33,7 @@ pastebinc:
 	$(CC) -fPIC $(CFLAGS) $(LIBS) -o $(PROGNAME) pastebinc.c
 
 clean:
-	rm -f *.o *.out $(TARGETS)
+	rm -f *.o *.out $(PROGNAME)
 
 install: $(TARGETS)
 	$(INSTALL) -d $(DESTDIR)$(bindir)
