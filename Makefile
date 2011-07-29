@@ -3,9 +3,16 @@ GIT_VERSION := $(shell [ -d .git ] && echo "-$$(git describe --always)")
 
 PROGNAME ?= pastebinc
 
+prefix ?= /usr/local
+bindir ?= $(prefix)/bin
+CONFDIR ?= /etc/pastebinc
+DESTDIR ?= .
+INSTALL	?= install
+
 CFLAGS ?= -g
 CFLAGS += -DPROGNAME=\"$(PROGNAME)\"
 CFLAGS += -DVERSION=\"$(VERSION)$(GIT_VERSION)\"
+CFLAGS += -DCONFDIR=\"$(CONFDIR)\"
 CFLAGS += $(shell pkg-config --cflags glib-2.0)
 
 LIBS   ?= -lcurl
@@ -15,13 +22,6 @@ CC     ?= gcc
 
 TARGETS  = pastebinc
 
-prefix ?= /usr/local
-bindir ?= $(prefix)/bin
-confdir ?= etc
-DESTDIR ?=
-INSTALL	?= install
-
-CFLAGS += -DCONFDIR=\"$(confdir)\"
 
 all: $(TARGETS)
 
@@ -41,4 +41,5 @@ clean:
 install: $(TARGETS)
 	$(INSTALL) -d $(DESTDIR)$(bindir)
 	$(INSTALL) $(PROGNAME) $(DESTDIR)$(bindir)
-	$(INSTALL) etc/*.conf $(DESTDIR)$(confdir)
+	$(INSTALL) -d $(DESTDIR)$(CONFDIR)
+	$(INSTALL) -m644 ./etc/*.conf $(DESTDIR)$(CONFDIR)
