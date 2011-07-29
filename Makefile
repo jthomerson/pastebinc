@@ -17,8 +17,11 @@ TARGETS  = pastebinc
 
 prefix ?= /usr/local
 bindir ?= $(prefix)/bin
+confdir ?= etc
 DESTDIR ?=
 INSTALL	?= install
+
+CFLAGS += -DCONFDIR=\"$(confdir)\"
 
 all: $(TARGETS)
 
@@ -38,3 +41,4 @@ clean:
 install: $(TARGETS)
 	$(INSTALL) -d $(DESTDIR)$(bindir)
 	$(INSTALL) $(PROGNAME) $(DESTDIR)$(bindir)
+	$(INSTALL) etc/*.conf $(DESTDIR)$(confdir)
