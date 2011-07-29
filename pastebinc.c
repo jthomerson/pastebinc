@@ -30,16 +30,16 @@
 #define PROGNAME "pastebinc"
 #endif
 
-#ifndef CONFLOC
-#define CONFLOC "./etc/pastebinc.conf"
-#endif
-
 #ifndef CONFDIR
 #define CONFDIR "./etc"
 #endif
 
+#ifndef CONFFILE
+#define CONFFILE "pastebinc.conf"
+#endif
+
 #ifndef VERSION
-#define VERSION "0.9-BETA"
+#define VERSION "0.9"
 #endif
 
 #define BSIZE (8 * 1024)
@@ -453,6 +453,7 @@ int read_config_files(struct pastebinc_config *config) {
   GKeyFileFlags flags;
   gsize length;
   char conffile[256];
+  static const char *default_conf = CONFDIR "/" CONFFILE;
 
   flags = G_KEY_FILE_KEEP_COMMENTS | G_KEY_FILE_KEEP_TRANSLATIONS;
 
@@ -461,8 +462,12 @@ int read_config_files(struct pastebinc_config *config) {
     config->keyfile = g_key_file_new();
     error = NULL;
 
-    if (!g_key_file_load_from_file(config->keyfile, CONFLOC, flags, &error)) {
-      g_error("%s\n", error->message);
+    if (access(default_conf, R_OK) == -1) {
+      fprintf(stderr, "ERROR: Can not access defaults config file: %s\n", default_conf);
+      return 1;
+    }
+    if (!g_key_file_load_from_file(config->keyfile, default_conf, flags, &error)) {
+      g_error("Error loading default config file [%s]: %s\n", default_conf, error->message);
       g_free(error);
       return 1;
     }

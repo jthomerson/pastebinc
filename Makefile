@@ -1,11 +1,11 @@
-VERSION=0.9-BETA
+VERSION=0.9
 GIT_VERSION := $(shell [ -d .git ] && echo "-$$(git describe --always)")
 
 PROGNAME ?= pastebinc
 
 prefix ?= /usr/local
 bindir ?= $(prefix)/bin
-CONFDIR ?= /etc/pastebinc
+CONFDIR ?= ./etc
 DESTDIR ?= .
 INSTALL	?= install
 
