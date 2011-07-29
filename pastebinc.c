@@ -39,7 +39,7 @@
 #endif
 
 #ifndef VERSION
-#define VERSION "0.1-BETA"
+#define VERSION "0.9-BETA"
 #endif
 
 #define BSIZE (8 * 1024)

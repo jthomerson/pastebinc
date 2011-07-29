@@ -1,4 +1,4 @@
-VERSION=0.1-beta
+VERSION=0.9-BETA
 GIT_VERSION := $(shell [ -d .git ] && echo "-$$(git describe --always)")
 
 PROGNAME ?= pastebinc
