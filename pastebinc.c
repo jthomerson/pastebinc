@@ -621,9 +621,12 @@ int display_usage(struct pastebinc_config *config, int show_extended) {
       first_ufo = NULL;
   }
 
-  if (first_ufo != NULL && first_ufov != NULL)
+  if (first_ufo != NULL && first_ufov != NULL) {
     fprintf(stderr,
-      "\nDo this by passing them after the -f argument, like this:\n"
-      PROGNAME " -p %s -f \"%s=%s\"\n",
+      "\nDo this by passing them after the -d argument, like this:\n"
+      PROGNAME " -p %s -d \"%s=%s\"\n",
      config->provider, first_ufo->name, first_ufov->post_value);
+  } else {
+    fprintf(stderr, "\nThere are no fields that can be supplied by the user.\n");
+  }
 }
