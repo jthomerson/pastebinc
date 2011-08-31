@@ -339,7 +339,7 @@ int get_configuration(struct pastebinc_config *config, int argc, char *argv[]) {
 
   t_user_field *last_user_field = config->user_fields;
 
-  while ((c = getopt(argc, argv, "tvn:p:d:x:f:bhH")) != -1) {
+  while ((c = getopt(argc, argv, "tvn:p:d:x:f:bBhH")) != -1) {
     switch (c) {
       case 't':
         config->tee = 1;
@@ -364,6 +364,9 @@ int get_configuration(struct pastebinc_config *config, int argc, char *argv[]) {
         break;
       case 'b':
         config->bypass_proxy = 1;
+        break;
+      case 'B':
+        config->bypass_proxy = -1;
         break;
       case 'h':
         show_usage = 1;
@@ -454,31 +457,38 @@ int read_config_files(struct pastebinc_config *config) {
   gsize length;
   char conffile[256];
   static const char *default_conf = CONFDIR "/" CONFFILE;
+  int bypass_proxy = 0; // temporary variable for global, then provider values
 
   flags = G_KEY_FILE_KEEP_COMMENTS | G_KEY_FILE_KEEP_TRANSLATIONS;
 
-  if (config->provider == NULL) {
-    // use system default provider
-    config->keyfile = g_key_file_new();
-    error = NULL;
+  // read global config file and pull defaults from it before provider-specific settings override
+  config->keyfile = g_key_file_new();
+  error = NULL;
 
-    if (access(default_conf, R_OK) == -1) {
-      fprintf(stderr, "ERROR: Can not access defaults config file: %s\n", default_conf);
-      return 1;
-    }
-    if (!g_key_file_load_from_file(config->keyfile, default_conf, flags, &error)) {
-      g_error("Error loading default config file [%s]: %s\n", default_conf, error->message);
-      g_free(error);
-      return 1;
-    }
-
-    config->provider = g_key_file_get_string(config->keyfile, "defaults", "provider", NULL);
-
-    g_key_file_free(config->keyfile);
+  if (access(default_conf, R_OK) == -1) {
+    fprintf(stderr, "ERROR: Can not access defaults config file: %s\n", default_conf);
+    return 1;
+  }
+  if (!g_key_file_load_from_file(config->keyfile, default_conf, flags, &error)) {
+    g_error("Error loading default config file [%s]: %s\n", default_conf, error->message);
     g_free(error);
-    config->keyfile = NULL;
+    return 1;
   }
 
+  // start reading global defaults
+  if (config->provider == NULL) { // use system default provider
+    config->provider = g_key_file_get_string(config->keyfile, "defaults", "provider", NULL);
+  }
+  bypass_proxy = g_key_file_has_key(config->keyfile, "defaults", "bypass_proxy", NULL) ?
+                 g_key_file_get_integer(config->keyfile, "defaults", "bypass_proxy", NULL) :
+                 0;
+
+  // clean up the resources from the global config file
+  g_key_file_free(config->keyfile);
+  g_free(error);
+  config->keyfile = NULL;
+
+  // now start on the provider-specific configuration
   sprintf(conffile, "%s/%s.conf", CONFDIR, config->provider);
 
   if (config->verbose) {
@@ -501,6 +511,22 @@ int read_config_files(struct pastebinc_config *config) {
     return 1;
   }
 
+  // load the bypass_proxy value from the provider file:
+  bypass_proxy = g_key_file_has_key(config->keyfile, "server", "bypass_proxy", NULL) ?
+                 g_key_file_get_integer(config->keyfile, "server", "bypass_proxy", NULL) :
+                 bypass_proxy; // keep global value if we don't have one in this file
+
+  // if the user specified an option, it will be:
+  // -1 (force proxy use), or 1 (force bypass proxy)
+  // we don't override the user-specified value with one from config
+  if (config->bypass_proxy == -1) {
+    config->bypass_proxy = 0;
+  } else if (config->bypass_proxy == 0) {
+    // the user did not specify a flag, so we use defaults
+    config->bypass_proxy = bypass_proxy;
+  }
+
+  // load the user_fields from the provider file:
   if (g_key_file_has_group(config->keyfile, "user_fields")) {
     gchar **fields = NULL;
     gchar **field = NULL;
@@ -575,6 +601,8 @@ int display_usage(struct pastebinc_config *config, int show_extended) {
    "  -x [value]     the expiration value to send with your paste\n"
    "  -f [value]     the format of your paste\n"
    "  -b             when this argument is present, we will bypass HTTP proxies\n"
+   "  -B             when this argument is present, we will NOT bypass HTTP proxies\n"
+   "                   even if the config file indicates that we should\n"
    "  -h             print this usage message\n"
    "  -H             print this usage message with extended provider information\n"
    "\n"
