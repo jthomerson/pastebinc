@@ -635,20 +635,38 @@ int display_usage(struct pastebinc_config *config, int show_extended) {
       g_key_file_get_string(config->keyfile, "server", "url", NULL));
   }
 
-  fprintf(stderr, "\nThe following fields can have values supplied by the user on the command line:\n");
-
   t_user_field_option *ufo = config->user_field_options;
   t_user_field_option *first_ufo = NULL;
   t_user_field_option_value *first_ufov = NULL;
 
+  // TODO: should do this in a more flexible way so that I don't have to have these separate variables
+  // and a list of if(...) checks below
+  char *format_field_name = g_key_file_has_key(config->keyfile, "standard_field_names", "format", NULL) ?
+                            g_key_file_get_string(config->keyfile, "standard_field_names", "format", NULL) :
+                            NULL;
+  char *expiration_field_name = g_key_file_has_key(config->keyfile, "standard_field_names", "expiration", NULL) ?
+                                g_key_file_get_string(config->keyfile, "standard_field_names", "expiration", NULL) :
+                                NULL;
+
+  if (ufo == NULL)
+    fprintf(stderr, "\nThere are no fields that can be supplied by the user.\n");
+  else
+    fprintf(stderr, "\nThe following fields can have values supplied by the user on the command line:\n");
+
   while (ufo != NULL) {
-    fprintf(stderr, "\nField name: %s\nOptions:\n", ufo->name);
     t_user_field_option_value *ufov = ufo->values;
 
-    if (first_ufo == NULL)
-      first_ufo = ufo;
-    if (first_ufov == NULL)
-      first_ufov = ufov;
+    if (format_field_name != NULL && strcmp(ufo->name, format_field_name) == 0) {
+      fprintf(stderr, "\nFor this provider, the valid values for the -f (format) option are:\n");
+    } else if (expiration_field_name != NULL && strcmp(ufo->name, expiration_field_name) == 0) {
+      fprintf(stderr, "\nFor this provider, the valid values for the -x (expiration) option are:\n");
+    } else {
+      fprintf(stderr, "\nField name: '%s'\n    Valid options:\n    --------------\n", ufo->name);
+      if (first_ufo == NULL)
+        first_ufo = ufo;
+      if (first_ufov == NULL)
+        first_ufov = ufov;
+    }
 
     while (ufov != NULL) {
       fprintf(stderr, "    %s (%s)\n", ufov->post_value, ufov->user_value);
@@ -664,7 +682,5 @@ int display_usage(struct pastebinc_config *config, int show_extended) {
       "\nDo this by passing them after the -d argument, like this:\n"
       PROGNAME " -p %s -d \"%s=%s\"\n",
       config->provider, first_ufo->name, first_ufov->post_value);
-  } else {
-    fprintf(stderr, "\nThere are no fields that can be supplied by the user.\n");
   }
 }
