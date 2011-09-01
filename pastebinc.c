@@ -251,7 +251,7 @@ int pastebin_post(struct pastebinc_config *config, struct paste_info *pi) {
     t_user_field *uf = config->user_fields;
     while (uf) {
       if (config->verbose)
-        fprintf(stderr, "DEBUG: adding user field: %s = %s\n", uf->name, uf->value);
+        fprintf(stderr, "DEBUG: adding user field to curl: %s = %s\n", uf->name, uf->value);
       curl_formadd(&post, &last, CURLFORM_COPYNAME, uf->name, CURLFORM_COPYCONTENTS, uf->value, CURLFORM_END);
       uf = uf->next;
     }
@@ -391,10 +391,10 @@ int get_configuration(struct pastebinc_config *config, int argc, char *argv[]) {
   }
 
   if (!abort)
-    abort = add_config_user_field(config, expiration, "expiration");
+    abort = add_config_user_field(config, "expiration", expiration);
 
   if (!abort)
-    abort = add_config_user_field(config, format, "format");
+    abort = add_config_user_field(config, "format", format);
 
   return abort;
 }
@@ -404,6 +404,10 @@ int add_user_field(struct pastebinc_config *config, char *name, char *value) {
   uf = (t_user_field *) malloc(sizeof(t_user_field));
   uf->name = name;
   uf->value = value;
+
+  if (config->verbose)
+    fprintf(stderr, "DEBUG: adding user field to config: '%s'='%s'\n", name, value);
+
   uf->next = NULL;
   if (config->user_fields == NULL) {
     config->user_fields = uf;
@@ -420,12 +424,16 @@ int add_user_field(struct pastebinc_config *config, char *name, char *value) {
   }
 }
 
-int add_config_user_field(struct pastebinc_config *config, char *value, char *fieldname) {
+int add_config_user_field(struct pastebinc_config *config, char *fieldname, char *value) {
   if (value == NULL)
     return 0;
 
+  if (!g_key_file_has_key(config->keyfile, "standard_field_names", fieldname, NULL)) {
+    fprintf(stderr, "ERROR: this provider [%s] does not have a field configured for '%s'\n", config->provider, fieldname);
+    return 1;
+  }
+
   char *post_field_name = g_key_file_get_string(config->keyfile, "standard_field_names", fieldname, NULL);
-  add_user_field(config, post_field_name, value);
 
   t_user_field_option *ufo = config->user_field_options;
   int found = 0;
@@ -448,6 +456,8 @@ int add_config_user_field(struct pastebinc_config *config, char *value, char *fi
     fprintf(stderr, "ERROR: invalid value for %s field.  Use -H for possible values\n", post_field_name);
     return 1;
   }
+
+  add_user_field(config, post_field_name, value);
   return 0;
 }
 
@@ -653,7 +663,7 @@ int display_usage(struct pastebinc_config *config, int show_extended) {
     fprintf(stderr,
       "\nDo this by passing them after the -d argument, like this:\n"
       PROGNAME " -p %s -d \"%s=%s\"\n",
-     config->provider, first_ufo->name, first_ufov->post_value);
+      config->provider, first_ufo->name, first_ufov->post_value);
   } else {
     fprintf(stderr, "\nThere are no fields that can be supplied by the user.\n");
   }
