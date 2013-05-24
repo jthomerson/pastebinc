@@ -33,7 +33,7 @@ all: $(TARGETS)
 #
 
 pastebinc: 
-	$(CC) -fPIC $(CFLAGS) $(LIBS) -o $(PROGNAME) pastebinc.c
+	$(CC) -fPIC $(CFLAGS) -o $(PROGNAME) pastebinc.c $(LIBS)
 
 clean:
 	rm -f *.o *.out $(PROGNAME)
